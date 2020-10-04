@@ -11,38 +11,45 @@ use std::fs::File;
 use std::io::prelude::*;
 
 const BIG_SPHERE : f32 = 2.;
-const SPHERE_SIZE : f32 = 0.5;
+const SPHERES : usize = 79;
+const SPHERE_SIZE : f32 = 0.6;
+
+struct Node {
+    node : SceneNode,
+    weight : f32
+}
 
 fn rnd_vec() -> Vector3<f32> {
     let mut rng = rand::thread_rng();
     Vector3::new(rng.gen::<f32>()-0.5,rng.gen::<f32>()-0.5,rng.gen::<f32>()-0.5)
 }
 
-fn relax(nodes: &mut Vec<SceneNode>, brown:f32) {
+fn relax(nodes: &mut Vec<Node>, brown:f32) {
     for i in 0..nodes.len() {
-        let x = nodes[i].data().local_translation().vector;
+        let x = nodes[i].node.data().local_translation().vector;
         // let mut delta : Vector3<f32> = Vector3::zeros();
         let mut delta : Vector3<f32> = rnd_vec()*brown;
+        delta += 0.5 *(BIG_SPHERE-x.norm()) * x / x.norm();
         for j in 0..nodes.len() {
-            let y = nodes[j].data().local_translation().vector;
+            let y = nodes[j].node.data().local_translation().vector;
             let dist = (x-y).norm();
             if dist != 0. {
-                delta += (0.5*(x-y)) / (dist*dist);
+                delta += (0.005*(x-y)) * nodes[i].weight * nodes[j].weight / (dist*dist);
             }
         }
         // println!("{}: {}", i, delta);
-        let mut new_point = x+delta;
-        new_point.unscale_mut(new_point.norm() / BIG_SPHERE);
-        delta = new_point - x;
-        nodes[i].append_translation(&Translation3::from(delta));
+        // let mut new_point = x+delta;
+        // new_point.unscale_mut(new_point.norm() / BIG_SPHERE);
+        // delta = new_point - x;
+        nodes[i].node.append_translation(&Translation3::from(delta));
     }
 }
 
-fn write_scad(nodes: &Vec<SceneNode>) {
+fn write_scad(nodes: &Vec<Node>) {
     let mut file = File::create("spheres.scad").unwrap();
     for i in 0..nodes.len() {
-        let x = nodes[i].data().local_translation().vector;
-        writeln!(file, "translate([{},{},{}]) {{sphere({},$fn=100);}};", x[0], x[1], x[2], SPHERE_SIZE).unwrap();
+        let x = nodes[i].node.data().local_translation().vector;
+        writeln!(file, "translate([{},{},{}]) {{sphere({},$fn=30);}};", x[0], x[1], x[2], SPHERE_SIZE*nodes[i].weight.powf(0.33)).unwrap();
     }
 }
 
@@ -58,8 +65,8 @@ impl State for AppState {
 }
 
 fn relaxation_scheme(i:usize) -> f32 {
-    let factor = 10. * f32::exp(-(i as f32) * 0.0005);
-    if factor > 0.03 {
+    let factor = 0.5 * f32::exp(-(i as f32) * 0.00005);
+    if factor > 0.0003 {
         factor }
     else { 0. }
 }
@@ -70,19 +77,16 @@ fn main() {
     window.set_framerate_limit(Some(60));
     let mut node_group = window.add_group();
 
-    let mut nodes : Vec<SceneNode> = Vec::new();
-    for i in 0..100 {
-        let mut c = node_group.add_sphere(SPHERE_SIZE);
-        if i%2>=0 {
-            c.set_color(1.0, 0.0, 0.0);
-        } else {
-            c.set_color(1.0, 1.0, 1.0);
-        }
+    let mut nodes : Vec<Node> = Vec::new();
+    for i in 0..SPHERES {
+        let weight : f32 = if i<6  { 4. } else { 1. };
+        let mut c = node_group.add_sphere(SPHERE_SIZE*weight.powf(0.33));
+        c.set_color(1.0, 0.0, 0.0);
         let mut pos = rnd_vec();
         pos.unscale_mut(pos.norm());
         pos.scale_mut(BIG_SPHERE);
         c.set_local_translation(Translation3::from(pos));
-        nodes.push(c);
+        nodes.push(Node{ node : c, weight : weight });
     }
 
     window.set_light(Light::StickToCamera);
@@ -101,10 +105,12 @@ fn main() {
             i+=1;
         }
         println!("{}", i);
-        if i>30000 {
+        if i>400_000 {
             break;
         }
     }
     write_scad(&nodes);
+    println!("Done!");
+    while window.render() {}
 
 }
