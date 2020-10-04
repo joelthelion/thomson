@@ -7,8 +7,11 @@ use kiss3d::scene::SceneNode;
 use kiss3d::window::{State, Window};
 use na::{UnitQuaternion, Vector3, Translation3};
 use rand::prelude::*;
+use std::fs::File;
+use std::io::prelude::*;
 
-const SPHERE_SIZE : f32 = 2.;
+const BIG_SPHERE : f32 = 2.;
+const SPHERE_SIZE : f32 = 0.5;
 
 fn rnd_vec() -> Vector3<f32> {
     let mut rng = rand::thread_rng();
@@ -29,9 +32,17 @@ fn relax(nodes: &mut Vec<SceneNode>, brown:f32) {
         }
         // println!("{}: {}", i, delta);
         let mut new_point = x+delta;
-        new_point.unscale_mut(new_point.norm() / SPHERE_SIZE);
+        new_point.unscale_mut(new_point.norm() / BIG_SPHERE);
         delta = new_point - x;
         nodes[i].append_translation(&Translation3::from(delta));
+    }
+}
+
+fn write_scad(nodes: &Vec<SceneNode>) {
+    let mut file = File::create("spheres.scad").unwrap();
+    for i in 0..nodes.len() {
+        let x = nodes[i].data().local_translation().vector;
+        writeln!(file, "translate([{},{},{}]) {{sphere({},$fn=100);}};", x[0], x[1], x[2], SPHERE_SIZE).unwrap();
     }
 }
 
@@ -46,6 +57,13 @@ impl State for AppState {
     }
 }
 
+fn relaxation_scheme(i:usize) -> f32 {
+    let factor = 10. * f32::exp(-(i as f32) * 0.0005);
+    if factor > 0.03 {
+        factor }
+    else { 0. }
+}
+
 fn main() {
     let mut window = Window::new("Thomson problem");
     window.set_background_color(0.05, 0.05, 0.05);
@@ -54,7 +72,7 @@ fn main() {
 
     let mut nodes : Vec<SceneNode> = Vec::new();
     for i in 0..100 {
-        let mut c = node_group.add_sphere(0.5);
+        let mut c = node_group.add_sphere(SPHERE_SIZE);
         if i%2>=0 {
             c.set_color(1.0, 0.0, 0.0);
         } else {
@@ -62,7 +80,7 @@ fn main() {
         }
         let mut pos = rnd_vec();
         pos.unscale_mut(pos.norm());
-        pos.scale_mut(SPHERE_SIZE);
+        pos.scale_mut(BIG_SPHERE);
         c.set_local_translation(Translation3::from(pos));
         nodes.push(c);
     }
@@ -78,8 +96,15 @@ fn main() {
         // for c in nodes.iter_mut() {
             // c.prepend_to_local_rotation(&rot);
         // }
-        relax(&mut nodes, 5. * f32::exp(-i as f32 * 0.01));
-        i+=1;
+        for _ in 0..100 {
+            relax(&mut nodes, relaxation_scheme(i));
+            i+=1;
+        }
+        println!("{}", i);
+        if i>30000 {
+            break;
+        }
     }
+    write_scad(&nodes);
 
 }
