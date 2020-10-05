@@ -12,7 +12,7 @@ use std::io::prelude::*;
 
 const BIG_SPHERE : f32 = 2.;
 const SPHERES : usize = 79;
-const SPHERE_SIZE : f32 = 1.2;
+const SPHERE_SIZE : f32 = 0.8;
 
 struct Node {
     node : SceneNode,
@@ -74,14 +74,16 @@ fn relaxation_scheme(i:usize) -> f32 {
 }
 
 fn main() {
+    let mut rng = rand::thread_rng();
     let mut window = Window::new("Thomson problem");
     window.set_background_color(0.05, 0.05, 0.05);
     window.set_framerate_limit(Some(60));
     let mut node_group = window.add_group();
 
     let mut nodes : Vec<Node> = Vec::new();
-    for i in 0..SPHERES {
-        let weight : f32 = if i<12  { 10. } else { 1. };
+    for _ in 0..SPHERES {
+        // let weight : f32 = if i<12  { 10. } else { 1. };
+        let weight : f32 = 1. + 3. * rng.gen::<f32>();
         let mut c = node_group.add_sphere(SPHERE_SIZE*weight.powf(0.33));
         c.set_color(1.0, 0.0, 0.0);
         let mut pos = rnd_vec();
@@ -107,7 +109,7 @@ fn main() {
             i+=1;
         }
         println!("{}", i);
-        if i>150_000 {
+        if i>300_000 {
             break;
         }
     }
