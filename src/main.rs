@@ -12,7 +12,7 @@ use std::io::prelude::*;
 
 const BIG_SPHERE : f32 = 2.;
 const SPHERES : usize = 79;
-const SPHERE_SIZE : f32 = 0.8;
+const SPHERE_SIZE : f32 = 0.9;
 
 struct Node {
     node : SceneNode,
@@ -49,10 +49,17 @@ fn relax(nodes: &mut Vec<Node>, brown:f32) {
 
 fn write_scad(nodes: &Vec<Node>) {
     let mut file = File::create("spheres.scad").unwrap();
+    writeln!(file, "difference() {{ union() {{").unwrap();
     for i in 0..nodes.len() {
         let x = nodes[i].node.data().local_translation().vector;
         writeln!(file, "translate([{},{},{}]) {{sphere({},$fn=30);}};", x[0], x[1], x[2], SPHERE_SIZE*nodes[i].weight.powf(0.33)).unwrap();
     }
+    writeln!(file, "}}; union() {{ ").unwrap();
+    for i in 0..nodes.len() {
+        let x = nodes[i].node.data().local_translation().vector;
+        writeln!(file, "translate([{},{},{}]) {{sphere({},$fn=30);}};", x[0], x[1], x[2], SPHERE_SIZE*nodes[i].weight.powf(0.33)-0.2).unwrap();
+    }
+    writeln!(file, "}}; }};").unwrap();
 }
 
 struct AppState {
@@ -109,12 +116,9 @@ fn main() {
             i+=1;
         }
         println!("{}", i);
-        if i>300_000 {
-            break;
+        if i>0 && i % 100_000 == 0 {
+            write_scad(&nodes);
+            println!("Wrote to disk!");
         }
     }
-    write_scad(&nodes);
-    println!("Done!");
-    while window.render() {}
-
 }
